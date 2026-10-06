@@ -10,6 +10,7 @@ for anything in a Signal Chain or the Master FX.
 - **Curve page**: the transfer curve with the signal's position riding it
 - **Sidechain high-pass** so lows and plosives don't pump a vocal
 - **Peak or RMS** detection, **auto makeup**, input gain
+- **Bypass** switch for A/B comparison, click-free
 - **11 factory presets**, plus Schwung's own *My Presets*
 - **No lookahead, no added latency**: safe for monitoring a live mic
 
@@ -27,7 +28,7 @@ Jog through them left to right:
 | **Main** | Thrsh · Ratio · Atk · Rel / Knee · Gain · Mix · **GR** |
 | **Curve** | the same eight knobs, drawn as the transfer curve |
 | **Presets** | factory presets (jog to browse, click to load) |
-| **Setup** | In · HPF · Det · Auto / **GR** |
+| **Setup** | In · HPF · Det · Auto / Byp · **GR** |
 
 | Control | Range | Notes |
 |---|---|---|
@@ -41,7 +42,8 @@ Jog through them left to right:
 | Input | -24 … +24 dB | before everything; presets do not change it |
 | Sidechain HPF | Off / 60 / 100 / 150 / 250 Hz | 12 dB/oct, **detector only**; the audio keeps its lows |
 | Detector | Peak / RMS | RMS is calibrated so a sine reads the same level in both |
-| Auto Makeup | Off / On | adds half the reduction a 0 dBFS signal would get; Makeup adds on top |
+| Auto Makeup | Off / On | sets makeup to half the reduction a 0 dBFS signal would get; **replaces** the Makeup knob while on |
+| Bypass | Off / On | passes the input through untouched (no Input, Makeup or Mix either), crossfaded over ~10 ms; presets leave it alone |
 
 ### The meter
 
@@ -50,6 +52,12 @@ bar filling from the right, with ticks at 3, 6 and 12 dB. Touch knob 8 and the
 header reads e.g. `-6.2 dB in -9`: 6.2 dB of reduction, with the detector
 seeing -9 dBFS. The **Curve** page draws the same reading as a dot on the
 transfer curve, beside a vertical reduction meter.
+
+While **Bypass** is on the compressor keeps listening, so the meter goes on
+showing what it *would* be doing: the cell reads `BYP` over a dithered bar,
+and the Curve page says BYPASS with a hollow dot. Switch it back and you hear
+exactly that, with no settling. For a fair A/B, set Makeup so both positions
+sound equally loud first: louder always sounds better.
 
 ### Factory presets
 
@@ -88,7 +96,8 @@ changes are smoothed (~10 ms) so turning them does not click.
 
 ### Notes for Schwung developers
 
-- **The meter is one key.** `gr` answers `"<gain change> dB in <level>"`. The
+- **The meter is one key.** `gr` answers `"<gain change> dB in <level>"`,
+  with ` byp` appended while bypassed. The
   knob grid refreshes `live` params one read per tick *shared between them*,
   so a second meter key would halve the rate of both. The string is also what
   the header shows when the knob is touched, so it is written to be read.

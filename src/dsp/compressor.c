@@ -31,7 +31,9 @@
  * value changes, so a turn costs a handful of expf/cosf calls.
  *
  * THE METER. One read-only key, `gr`, carries everything the UI draws:
- * "<gain change> dB in <detector level>", e.g. "-4.5 dB in -12". It is ONE key
+ * "<gain change> dB in <detector level>", e.g. "-4.5 dB in -12", with
+ * " byp" appended while Bypass is on (the reading is then what the
+ * compressor would be doing, not what is being heard). It is ONE key
  * because the knob grid refreshes live keys at one read per tick, shared
  * between them -- two keys would each update at half the rate. The string is
  * also what the header shows when knob 8 is touched, so it is written to be
@@ -71,7 +73,8 @@
 #define METER_STALE_READS 24
 /* Auto makeup compensates this fraction of the reduction a 0 dBFS signal
  * would get from the static curve. Half is the usual compromise: full
- * compensation at full scale makes everything below it much louder. */
+ * compensation at full scale makes everything below it much louder. While
+ * it is on, it REPLACES the Makeup knob rather than adding to it. */
 #define AUTO_MAKEUP_FRACTION 0.5f
 
 /* ------------------------------------------------------------------ params */
@@ -97,6 +100,7 @@ typedef struct {
     int   sc_hpf;         /* index into HPF_FREQS       */
     int   detect;         /* 0 = Peak, 1 = RMS          */
     int   auto_makeup;    /* 0 = Off, 1 = On            */
+    int   bypass;         /* 0 = Off, 1 = On            */
 } comp_params_t;
 
 typedef enum { PT_FLOAT, PT_ENUM } param_type_t;
@@ -130,13 +134,16 @@ static const param_def_t PARAMS[] = {
     PE("sc_hpf",      sc_hpf,      HPF_OPTIONS,    N_HPF,    1),
     PE("detect",      detect,      DETECT_OPTIONS, N_DETECT, 1),
     PE("auto_makeup", auto_makeup, ONOFF_OPTIONS,  N_ONOFF,  1),
+    /* Bypass is an A/B switch, not part of a sound: loading a preset while
+     * listening bypassed must not switch the compressor back in. */
+    PE("bypass",      bypass,      ONOFF_OPTIONS,  N_ONOFF,  0),
 };
 #define N_PARAMS ((int)(sizeof(PARAMS) / sizeof(PARAMS[0])))
 
 static const comp_params_t DEFAULTS = {
     .threshold_db = -18.0f, .ratio = 3.0f, .attack_ms = 10.0f, .release_ms = 150.0f,
     .knee_db = 6.0f, .makeup_db = 0.0f, .mix = 1.0f, .input_db = 0.0f,
-    .sc_hpf = 0, .detect = 0, .auto_makeup = 0,
+    .sc_hpf = 0, .detect = 0, .auto_makeup = 0, .bypass = 0,
 };
 
 /* ----------------------------------------------------------------- presets */
@@ -148,17 +155,17 @@ typedef struct {
 
 /* HPF index: 0 Off, 1 60 Hz, 2 100 Hz, 3 150 Hz, 4 250 Hz. Detect: 0 Peak, 1 RMS. */
 static const comp_preset_t PRESETS[] = {
-    { "Default",        { -18.0f,  3.0f, 10.0f, 150.0f,  6.0f,  0.0f, 1.00f, 0.0f, 0, 0, 0 } },
-    { "Vocal Leveler",  { -20.0f,  2.5f, 12.0f, 160.0f,  8.0f,  4.0f, 1.00f, 0.0f, 2, 1, 0 } },
-    { "Vocal Upfront",  { -24.0f,  4.0f,  4.0f,  90.0f,  5.0f,  7.0f, 1.00f, 0.0f, 2, 0, 0 } },
-    { "Vocal Gentle",   { -16.0f,  2.0f, 20.0f, 250.0f, 10.0f,  3.0f, 1.00f, 0.0f, 2, 1, 0 } },
-    { "Spoken Word",    { -26.0f,  3.5f,  8.0f, 180.0f,  8.0f,  8.0f, 1.00f, 0.0f, 3, 1, 0 } },
-    { "Acoustic Strum", { -20.0f,  3.0f, 25.0f, 140.0f,  6.0f,  4.0f, 1.00f, 0.0f, 2, 0, 0 } },
-    { "Fingerpicked",   { -24.0f,  2.5f, 15.0f, 220.0f,  8.0f,  5.0f, 1.00f, 0.0f, 1, 1, 0 } },
-    { "Parallel Crush", { -36.0f, 10.0f,  1.0f,  80.0f,  0.0f, 12.0f, 0.35f, 0.0f, 0, 0, 0 } },
-    { "Peak Catcher",   {  -8.0f, 12.0f,  0.5f,  60.0f,  2.0f,  0.0f, 1.00f, 0.0f, 0, 0, 0 } },
-    { "Bus Glue",       { -16.0f,  2.0f, 30.0f, 300.0f,  6.0f,  2.0f, 1.00f, 0.0f, 1, 1, 0 } },
-    { "Drum Punch",     { -20.0f,  4.0f, 25.0f,  70.0f,  3.0f,  4.0f, 1.00f, 0.0f, 0, 0, 0 } },
+    { "Default",        { -18.0f,  3.0f, 10.0f, 150.0f,  6.0f,  0.0f, 1.00f, 0.0f, 0, 0, 0, 0 } },
+    { "Vocal Leveler",  { -20.0f,  2.5f, 12.0f, 160.0f,  8.0f,  4.0f, 1.00f, 0.0f, 2, 1, 0, 0 } },
+    { "Vocal Upfront",  { -24.0f,  4.0f,  4.0f,  90.0f,  5.0f,  7.0f, 1.00f, 0.0f, 2, 0, 0, 0 } },
+    { "Vocal Gentle",   { -16.0f,  2.0f, 20.0f, 250.0f, 10.0f,  3.0f, 1.00f, 0.0f, 2, 1, 0, 0 } },
+    { "Spoken Word",    { -26.0f,  3.5f,  8.0f, 180.0f,  8.0f,  8.0f, 1.00f, 0.0f, 3, 1, 0, 0 } },
+    { "Acoustic Strum", { -20.0f,  3.0f, 25.0f, 140.0f,  6.0f,  4.0f, 1.00f, 0.0f, 2, 0, 0, 0 } },
+    { "Fingerpicked",   { -24.0f,  2.5f, 15.0f, 220.0f,  8.0f,  5.0f, 1.00f, 0.0f, 1, 1, 0, 0 } },
+    { "Parallel Crush", { -36.0f, 10.0f,  1.0f,  80.0f,  0.0f, 12.0f, 0.35f, 0.0f, 0, 0, 0, 0 } },
+    { "Peak Catcher",   {  -8.0f, 12.0f,  0.5f,  60.0f,  2.0f,  0.0f, 1.00f, 0.0f, 0, 0, 0, 0 } },
+    { "Bus Glue",       { -16.0f,  2.0f, 30.0f, 300.0f,  6.0f,  2.0f, 1.00f, 0.0f, 1, 1, 0, 0 } },
+    { "Drum Punch",     { -20.0f,  4.0f, 25.0f,  70.0f,  3.0f,  4.0f, 1.00f, 0.0f, 0, 0, 0, 0 } },
 };
 #define N_PRESETS ((int)(sizeof(PRESETS) / sizeof(PRESETS[0])))
 
@@ -178,7 +185,7 @@ typedef struct {
     float a_rms;                /* RMS averaging coefficient (1 - pole) */
     float k_smooth;             /* gain smoothing coefficient (1 - pole) */
     float slope;                /* 1/ratio - 1 (<= 0) */
-    float makeup_total_db;      /* makeup + auto makeup */
+    float makeup_total_db;      /* Makeup, or the auto value while Auto is on */
     float in_gain_target;       /* linear */
     int   hpf_on;
     int   hpf_idx;              /* the HPF setting the state below belongs to */
@@ -191,6 +198,7 @@ typedef struct {
     float in_gain;              /* smoothed */
     float makeup_db_s;          /* smoothed */
     float mix_s;                /* smoothed */
+    float wet_s;                /* smoothed 1 - bypass */
     int   started;              /* a block has been processed */
 
     /* meter (display values, with ballistics) */
@@ -267,7 +275,7 @@ static void update_coeffs(comp_t *c) {
     c->a_att  = one_pole(p->attack_ms);
     c->a_rel  = one_pole(p->release_ms);
     c->slope  = 1.0f / p->ratio - 1.0f;
-    c->makeup_total_db = p->makeup_db + (p->auto_makeup ? auto_makeup_db(p) : 0.0f);
+    c->makeup_total_db = p->auto_makeup ? auto_makeup_db(p) : p->makeup_db;
     c->in_gain_target  = db_to_lin(p->input_db);
     c->hpf_on = p->sc_hpf > 0 && p->sc_hpf < N_HPF;
     if (c->hpf_on) hpf_design(&c->hpf, HPF_FREQS[p->sc_hpf]);
@@ -296,6 +304,7 @@ static void *comp_create(const char *module_dir, const char *config_json) {
     c->in_gain = c->in_gain_target;
     c->makeup_db_s = c->makeup_total_db;
     c->mix_s = c->p.mix;
+    c->wet_s = c->p.bypass ? 0.0f : 1.0f;
     c->m_in = DB_FLOOR;
     return c;
 }
@@ -317,6 +326,7 @@ static void comp_process(void *instance, int16_t *io, int frames) {
         c->in_gain = c->in_gain_target;
         c->makeup_db_s = c->makeup_total_db;
         c->mix_s = c->p.mix;
+        c->wet_s = c->p.bypass ? 0.0f : 1.0f;
         c->started = 1;
     }
 
@@ -328,11 +338,12 @@ static void comp_process(void *instance, int16_t *io, int frames) {
     const float in_t = c->in_gain_target;
     const float mk_t = c->makeup_total_db;
     const float mix_t = c->p.mix;
+    const float wet_t = c->p.bypass ? 0.0f : 1.0f;
     const int rms = c->p.detect == 1;
     const int hpf = c->hpf_on;
 
     float gr = c->gr_db;
-    float in_gain = c->in_gain, mk = c->makeup_db_s, mix = c->mix_s;
+    float in_gain = c->in_gain, mk = c->makeup_db_s, mix = c->mix_s, wet = c->wet_s;
     float ms = c->ms;
     float blk_gr = 0.0f, blk_in = DB_FLOOR;
 
@@ -340,9 +351,13 @@ static void comp_process(void *instance, int16_t *io, int frames) {
         in_gain += k * (in_t - in_gain);
         mk      += k * (mk_t - mk);
         mix     += k * (mix_t - mix);
+        wet     += k * (wet_t - wet);
 
-        const float l = (float)io[2 * i]     * (in_gain / 32768.0f);
-        const float r = (float)io[2 * i + 1] * (in_gain / 32768.0f);
+        /* The untouched input, before Input gain: what Bypass lets through. */
+        const float dl = (float)io[2 * i]     * (1.0f / 32768.0f);
+        const float dr = (float)io[2 * i + 1] * (1.0f / 32768.0f);
+        const float l = dl * in_gain;
+        const float r = dr * in_gain;
 
         float sl = l, sr = r;
         if (hpf) {
@@ -374,6 +389,14 @@ static void comp_process(void *instance, int16_t *io, int frames) {
         const float g = expf((mk - gr) * LN10_OVER_20);
         float ol = l + mix * (l * g - l);
         float orr = r + mix * (r * g - r);
+        /* Bypass crossfades to the input as it arrived -- no Input gain, no
+         * Makeup, no Mix -- over the same ~10 ms as the other gains, so an
+         * A/B switch does not click. The detector keeps running underneath,
+         * so switching back in is seamless and the meter still shows what
+         * the compressor WOULD be doing. Fully bypassed, dl * 32768 is the
+         * original integer, so the output is bit-exact. */
+        ol  = dl + wet * (ol - dl);
+        orr = dr + wet * (orr - dr);
 
         ol = clampf(ol * 32768.0f, -32768.0f, 32767.0f);
         orr = clampf(orr * 32768.0f, -32768.0f, 32767.0f);
@@ -387,6 +410,7 @@ static void comp_process(void *instance, int16_t *io, int frames) {
     c->in_gain     = fabsf(in_gain - in_t) < 1e-6f ? in_t : in_gain;
     c->makeup_db_s = fabsf(mk - mk_t) < 1e-5f ? mk_t : mk;
     c->mix_s       = fabsf(mix - mix_t) < 1e-6f ? mix_t : mix;
+    c->wet_s       = fabsf(wet - wet_t) < 1e-6f ? wet_t : wet;
     c->ms = flush_denormal(ms);
     for (int ch = 0; ch < 2; ch++) {
         c->hz[ch][0] = flush_denormal(c->hz[ch][0]);
@@ -550,9 +574,10 @@ static int format_meter(comp_t *c, char *buf, int len) {
      * cell label land cleanly on "-6.2" when the knob is touched. Exactly
      * zero prints as "0.0", never "-0.0". */
     const double change = c->m_gr < 0.05f ? 0.0 : -(double)c->m_gr;
+    const char *byp = c->p.bypass ? " byp" : "";
     if (c->m_in <= METER_FLOOR_DB)
-        return fit(snprintf(buf, len, "%.1f dB in --", change), len);
-    return fit(snprintf(buf, len, "%.1f dB in %d", change, (int)lrintf(c->m_in)), len);
+        return fit(snprintf(buf, len, "%.1f dB in --%s", change, byp), len);
+    return fit(snprintf(buf, len, "%.1f dB in %d%s", change, (int)lrintf(c->m_in), byp), len);
 }
 
 static int comp_get_param(void *instance, const char *key, char *buf, int len) {

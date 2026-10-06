@@ -98,10 +98,13 @@ check(declared.includes(ov.widgetKind), "the kind canvas.js registers is the one
 
 const { parseMeter, reduction, scale } = ov._test;
 const pm = (s) => JSON.stringify(parseMeter(s));
-check(pm("-4.5 dB in -12") === JSON.stringify({ gr: 4.5, inDb: -12 }), "parses a full reading");
-check(pm("4.5 dB in -12") === JSON.stringify({ gr: 4.5, inDb: -12 }), "the sign of the gain change is not load-bearing");
-check(pm("0.0 dB in --") === JSON.stringify({ gr: 0, inDb: null }), "parses silence");
-check(pm("7") === JSON.stringify({ gr: 7, inDb: null }), "a bare number is a reduction");
+const M = (gr, inDb, bypass) => JSON.stringify({ gr, inDb, bypass });
+check(pm("-4.5 dB in -12") === M(4.5, -12, false), "parses a full reading");
+check(pm("4.5 dB in -12") === M(4.5, -12, false), "the sign of the gain change is not load-bearing");
+check(pm("0.0 dB in --") === M(0, null, false), "parses silence");
+check(pm("-4.5 dB in -12 byp") === M(4.5, -12, true), "parses the bypass mark");
+check(pm("0.0 dB in -- byp") === M(0, null, true), "parses the bypass mark on silence");
+check(pm("7") === M(7, null, false), "a bare number is a reduction");
 check(parseMeter(null) === null && parseMeter(undefined) === null, "no answer is null, not zero");
 check(parseMeter("") === null && parseMeter("garbage") === null, "an unreadable value is null");
 check(scale(0) === 0 && scale(24) === 1 && scale(100) === 1 && scale(-3) === 0, "meter scale bounds");
@@ -122,7 +125,8 @@ if (curveFile && fs.existsSync(curveFile)) {
 /* ---------------------------------------------------------- drawCell sweep */
 
 const READINGS = [null, undefined, "", "garbage", "0.0 dB in --", "0.0 dB in -45",
-                  "-4.5 dB in -12", "-12.0 dB in -3", "-30.0 dB in 0", "7", "-0.1 dB in -60"];
+                  "-4.5 dB in -12", "-12.0 dB in -3", "-30.0 dB in 0", "7", "-0.1 dB in -60",
+                  "-6.0 dB in -9 byp", "0.0 dB in -- byp", "-30.0 dB in 0 byp"];
 let cellOverflow = 0, cellThrew = 0, cells = 0;
 for (let w = 14; w <= 64; w += 1) {
     for (let h = 4; h <= 30; h += 1) {
@@ -146,6 +150,8 @@ check(!threw, "drawCell tolerates a missing payload");
 
 /* More reduction lights more of the bar. */
 function litFor(v) { const t = makeCtx(32, 20); ov.drawCell(t.ctx, { values: { gr: v }, group: { keys: ["gr"] } }); return t.lit(); }
+check(litFor("-12.0 dB in -6 byp") > 0 && litFor("-12.0 dB in -6 byp") < litFor("-12.0 dB in -6"),
+      "bypassed, the bar is a lighter ghost of the same reading");
 check(litFor("-12.0 dB in -6") > litFor("-3.0 dB in -6") && litFor("-3.0 dB in -6") > litFor("0.0 dB in -6"),
       "the bar grows with the reduction");
 
@@ -158,6 +164,7 @@ const PAGES = [
     { gr: "-6.2 dB in -9", threshold: "-24.000", ratio: "4.000", knee: "0.000" },
     { gr: "-24.0 dB in 0", threshold: "-60.000", ratio: "20.000", knee: "24.000" },
     { gr: "-1.0 dB in -70", threshold: "0.000", ratio: "1.000", knee: "0.000" },
+    { gr: "-6.2 dB in -9 byp", threshold: "-24.000", ratio: "4.000", knee: "6.000" },
     { gr: "-3.0 dB in -12", threshold: "abc", ratio: "", knee: null },
 ];
 let pageOverflow = 0, pageThrew = 0, pagesDrawn = 0;

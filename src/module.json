@@ -26,6 +26,7 @@
       { "key": "sc_hpf", "name": "Sidechain HPF", "short_name": "HPF", "type": "enum", "options": ["Off", "60 Hz", "100 Hz", "150 Hz", "250 Hz"], "default": 0 },
       { "key": "detect", "name": "Detector", "short_name": "Det", "type": "enum", "options": ["Peak", "RMS"], "default": 0 },
       { "key": "auto_makeup", "name": "Auto Makeup", "short_name": "Auto", "type": "enum", "options": ["Off", "On"], "default": 0, "viz": { "kind": "switch" } },
+      { "key": "bypass", "name": "Bypass", "short_name": "Byp", "type": "enum", "options": ["Off", "On"], "default": 0, "viz": { "kind": "switch" } },
       { "key": "curve", "name": "Curve", "type": "canvas", "canvas_script": "canvas.js", "as_page": true, "show_value": false }
     ],
     "ui_hierarchy": {
@@ -55,12 +56,13 @@
         },
         "setup": {
           "name": "Setup",
-          "knobs": ["input", "sc_hpf", "detect", "auto_makeup", "gr"],
+          "knobs": ["input", "sc_hpf", "detect", "auto_makeup", "bypass", "gr"],
           "params": [
             { "key": "input" },
             { "key": "sc_hpf" },
             { "key": "detect" },
             { "key": "auto_makeup" },
+            { "key": "bypass" },
             { "key": "gr" }
           ]
         }

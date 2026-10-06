@@ -55,6 +55,7 @@ static comp_t *make_plain(double thr, double ratio, double atk, double rel) {
     setf(c, "attack", atk);    setf(c, "release", rel);
     setf(c, "knee", 0);        setf(c, "makeup", 0); setf(c, "mix", 1);
     set(c, "sc_hpf", "0");     set(c, "detect", "0"); set(c, "auto_makeup", "0");
+    set(c, "bypass", "0");
     return c;
 }
 
@@ -266,6 +267,17 @@ static void test_mix_makeup_input(void) {
     set(c, "auto_makeup", "On");
     out = run_sine(c, 1000.0, -30.0, 0.5, 0.1);
     CHECK(NEAR(out, -24.0, 0.1), "auto makeup +6 dB: expected -24 dBFS, got %.2f", out);
+    /* ...and it REPLACES the Makeup knob, whatever that is set to. */
+    setf(c, "makeup", 12);
+    out = run_sine(c, 1000.0, -30.0, 0.5, 0.1);
+    CHECK(NEAR(out, -24.0, 0.1), "auto makeup ignores Makeup +12: expected -24 dBFS, got %.2f", out);
+    setf(c, "makeup", -12);
+    out = run_sine(c, 1000.0, -30.0, 0.5, 0.1);
+    CHECK(NEAR(out, -24.0, 0.1), "auto makeup ignores Makeup -12: expected -24 dBFS, got %.2f", out);
+    /* Switching Auto off hands back to the knob. */
+    set(c, "auto_makeup", "Off");
+    out = run_sine(c, 1000.0, -30.0, 0.5, 0.1);
+    CHECK(NEAR(out, -42.0, 0.1), "Auto off: Makeup -12 again, expected -42 dBFS, got %.2f", out);
     drop(c);
 
     /* Input gain drives the detector as well as the level:
@@ -444,6 +456,81 @@ static void test_state_and_presets(void) {
     drop(c);
 }
 
+/* Run `blocks` of sine through `c` and report whether every output block is
+ * the input block, sample for sample. */
+static int passes_untouched(comp_t *c, double amp_db, int blocks) {
+    int16_t in[BLOCK * 2], ob[BLOCK * 2];
+    int exact = 1;
+    for (int b = 0; b < blocks; b++) {
+        sine_block(in, 1000.0, lin(amp_db));
+        memcpy(ob, in, sizeof in);
+        api()->process_block(c, ob, BLOCK);
+        if (memcmp(in, ob, sizeof in) != 0) exact = 0;
+    }
+    return exact;
+}
+
+static void test_bypass(void) {
+    printf("bypass\n");
+    /* Heavy compression, big makeup, input gain, partial mix: everything
+     * Bypass has to undo. */
+    comp_t *c = make_plain(-40, 20, 0.5, 50);
+    setf(c, "makeup", 18);
+    setf(c, "input", 6);
+    setf(c, "mix", 0.7);
+    set(c, "bypass", "On");
+    g_phase = 0;
+    CHECK(passes_untouched(c, -3.0, 200), "bypassed from load: bit-exact from the first sample");
+    CHECK(strcmp(get(c, "bypass"), "1") == 0, "bypass reads back as index 1");
+
+    /* The detector keeps running, and the meter says so. */
+    float gr = 0, in = 0;
+    char byp[8] = "";
+    const char *m = get(c, "gr");
+    CHECK(sscanf(m, "%f dB in %f %7s", &gr, &in, byp) == 3 && gr < -20.0f && strcmp(byp, "byp") == 0,
+          "bypassed meter still reads the would-be reduction, marked: \"%s\"", m);
+
+    /* Switching back in is a ~10 ms crossfade, not a step. */
+    set(c, "bypass", "Off");
+    int16_t buf[BLOCK * 2];
+    sine_block(buf, 1000.0, lin(-3.0));
+    int16_t dry0 = buf[2 * 10];
+    api()->process_block(c, buf, BLOCK);
+    /* 10 samples in, the fade is ~2% of the way: still almost the dry signal. */
+    CHECK(abs(buf[2 * 10] - dry0) < abs(dry0) / 10 + 2, "un-bypass fades in (sample 10: %d vs dry %d)",
+          buf[2 * 10], dry0);
+    double out = run_sine(c, 1000.0, -3.0, 0.3, 0.1);
+    CHECK(fabs(out - (-3.0)) > 2.0, "and then is processed again (%.2f dBFS, bypassed it was -3)", out);
+    m = get(c, "gr");
+    CHECK(strstr(m, "byp") == NULL, "meter drops the mark when bypass is off: \"%s\"", m);
+
+    /* Bypassed while running: it fades out, then is exact. */
+    set(c, "bypass", "1");
+    run_sine(c, 1000.0, -3.0, 0.2, 0.1);
+    CHECK(passes_untouched(c, -3.0, 50), "bypassed while running settles bit-exact");
+
+    /* A preset is a sound, not an A/B position: loading one keeps Bypass. */
+    set(c, "preset", "2");
+    CHECK(strcmp(get(c, "bypass"), "1") == 0, "loading a preset leaves bypass on");
+    set(c, "bypass", "Off");
+    set(c, "preset", "3");
+    CHECK(strcmp(get(c, "bypass"), "0") == 0, "...and off");
+
+    /* Saved with the rest of the state. */
+    set(c, "bypass", "On");
+    char blob[2048];
+    snprintf(blob, sizeof blob, "%s", get(c, "state"));
+    comp_t *d = make();
+    set(d, "state", blob);
+    CHECK(strcmp(get(d, "bypass"), "1") == 0, "bypass survives state save/restore");
+    drop(d);
+
+    set(c, "bypass", "maybe");
+    set(c, "bypass", "2");
+    CHECK(strcmp(get(c, "bypass"), "1") == 0, "invalid bypass writes are refused");
+    drop(c);
+}
+
 static void test_smoothing_and_safety(void) {
     printf("click-free changes, clipping, denormals\n");
     /* A +12 dB makeup jump ramps instead of stepping. */
@@ -537,6 +624,7 @@ int main(int argc, char **argv) {
     test_meter();
     test_params_and_wire();
     test_state_and_presets();
+    test_bypass();
     test_smoothing_and_safety();
     bench();
 

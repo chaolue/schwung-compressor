@@ -7,7 +7,9 @@
  *                                                    "0.0 dB in --"   (silence)
  *
  * The gain change is negative (it is a reduction); the sign is ignored when
- * parsing, so a reading of "4.5" means the same 4.5 dB of reduction.
+ * parsing, so a reading of "4.5" means the same 4.5 dB of reduction. While
+ * Bypass is on the DSP appends " byp": the reading is then what the
+ * compressor WOULD do, and both drawers show it dithered, as a ghost.
  *
  * It is one key on purpose: the knob grid refreshes `live` params one read
  * per tick, shared between them, so a second meter key would halve the rate
@@ -31,21 +33,22 @@
     var PLOT_RANGE_DB = 60;     /* the Curve page shows -60..0 dBFS */
     var TICKS_DB = [3, 6, 12];
 
-    /* "-4.5 dB in -12" -> { gr: 4.5, inDb: -12 }: `gr` is the reduction, a
-     * positive number of dB. A bare number is accepted as a reduction with no
-     * level. */
+    /* "-4.5 dB in -12" -> { gr: 4.5, inDb: -12, bypass: false }: `gr` is the
+     * reduction, a positive number of dB. A bare number is accepted as a
+     * reduction with no level. */
     function parseMeter(raw) {
         if (raw === null || raw === undefined) return null;
         var s = String(raw);
-        var m = /^\s*(-?\d+(?:\.\d+)?)\s*dB\s+in\s+(--|-?\d+(?:\.\d+)?)/.exec(s);
+        var m = /^\s*(-?\d+(?:\.\d+)?)\s*dB\s+in\s+(--|-?\d+(?:\.\d+)?)(\s+byp)?\s*$/.exec(s);
         if (m) {
             return {
                 gr: Math.abs(Number(m[1])),
                 inDb: m[2] === "--" ? null : Number(m[2]),
+                bypass: !!m[3],
             };
         }
         var n = Number(s);
-        if (s.trim() !== "" && isFinite(n)) return { gr: Math.abs(n), inDb: null };
+        if (s.trim() !== "" && isFinite(n)) return { gr: Math.abs(n), inDb: null, bypass: false };
         return null;
     }
 
@@ -83,6 +86,15 @@
         return m.gr < 0.05 ? "0.0" : "-" + m.gr.toFixed(1);
     }
 
+    /* A rect filled on a checkerboard in the frame's own coordinates: the
+     * "would be" fill used while bypassed. */
+    function dither(ctx, x, y, w, h) {
+        for (var yy = y; yy < y + h; yy++) {
+            var start = x + ((x + yy) & 1);
+            for (var xx = start; xx < x + w; xx += 2) ctx.fillRect(xx, yy, 1, 1, 1);
+        }
+    }
+
     function outline(ctx, x, y, w, h) {
         ctx.fillRect(x, y, w, 1, 1);
         ctx.fillRect(x, y + h - 1, w, 1, 1);
@@ -110,7 +122,7 @@
         var barH = h - barTop;
 
         if (showText) {
-            var s = grText(m);
+            var s = m && m.bypass ? "BYP" : grText(m);
             var tw = ctx.textWidth(s);
             if (tw <= w) ctx.print(w - tw, 0, s, 1);
         }
@@ -119,7 +131,10 @@
         var inner = w - 2;
         if (m && barH > 2) {
             var fill = Math.round(inner * scale(m.gr));
-            if (fill > 0) ctx.fillRect(1 + inner - fill, barTop + 1, fill, barH - 2, 1);
+            if (fill > 0) {
+                if (m.bypass) dither(ctx, 1 + inner - fill, barTop + 1, fill, barH - 2);
+                else ctx.fillRect(1 + inner - fill, barTop + 1, fill, barH - 2, 1);
+            }
         }
         if (barH > 3) {
             for (var i = 0; i < TICKS_DB.length; i++) {
@@ -185,7 +200,8 @@
             var r = S >= 30 ? 2 : 1;
             dotX = Math.max(1 + r, Math.min(S - 2 - r, dotX));
             dotY = Math.max(py0 + 1 + r, Math.min(py0 + S - 2 - r, dotY));
-            ctx.fillCircle(dotX, dotY, r, 1);
+            if (m.bypass && r > 1) ctx.drawCircle(dotX, dotY, r, 1);
+            else ctx.fillCircle(dotX, dotY, r, 1);
         }
 
         /* ---- vertical reduction meter, filling DOWN from the top ---- */
@@ -193,7 +209,10 @@
         outline(ctx, bx, py0, bw, S);
         if (m) {
             var fill = Math.round((S - 2) * scale(m.gr));
-            if (fill > 0) ctx.fillRect(bx + 1, py0 + 1, bw - 2, fill, 1);
+            if (fill > 0) {
+                if (m.bypass) dither(ctx, bx + 1, py0 + 1, bw - 2, fill);
+                else ctx.fillRect(bx + 1, py0 + 1, bw - 2, fill, 1);
+            }
         }
         /* Ticks at 3 / 6 / 12 dB: notches on the bar's inner left edge, in
          * the opposite colour to what they sit on. */
@@ -210,7 +229,8 @@
         var inTxt = m && m.inDb !== null ? String(Math.round(m.inDb)) : "--";
         var rTxt = ratio.toFixed(1) + ":1";
         var lines = [
-            ["GR " + gr + (m ? " dB" : ""), "GR " + gr, gr],
+            m && m.bypass ? ["BYPASS", "BYP"]
+                          : ["GR " + gr + (m ? " dB" : ""), "GR " + gr, gr],
             ["IN " + inTxt + (inTxt !== "--" ? " dB" : ""), "IN " + inTxt, inTxt],
             ["THR " + thr.toFixed(1), "T " + thr.toFixed(0)],
             ["RATIO " + rTxt, "R " + rTxt, rTxt],
