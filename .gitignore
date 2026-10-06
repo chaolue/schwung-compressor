@@ -1,0 +1,6 @@
+build/
+dist/
+*.o
+*.so
+.DS_Store
+node_modules/

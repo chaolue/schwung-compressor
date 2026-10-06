@@ -1,0 +1,70 @@
+{
+  "id": "compressor",
+  "name": "Compressor",
+  "abbrev": "CMP",
+  "version": "0.1.0",
+  "description": "Zero-latency compressor for live vocals and acoustic instruments: threshold, ratio, attack, release, soft knee, sidechain high-pass, parallel mix, a live gain-reduction meter and a transfer-curve page, with factory presets.",
+  "author": "chaolue",
+  "license": "MIT",
+  "dsp": "compressor.so",
+  "api_version": 2,
+  "component_type": "audio_fx",
+  "capabilities": {
+    "chainable": true,
+    "component_type": "audio_fx",
+    "canvas_script": "canvas.js",
+    "chain_params": [
+      { "key": "threshold", "name": "Threshold", "short_name": "Thrsh", "type": "float", "min": -60.0, "max": 0.0, "step": 0.5, "default": -18.0, "unit": "dB" },
+      { "key": "ratio", "name": "Ratio", "type": "float", "min": 1.0, "max": 20.0, "step": 0.1, "default": 3.0, "display_format": "%.1f" },
+      { "key": "attack", "name": "Attack", "short_name": "Atk", "type": "float", "min": 0.1, "max": 100.0, "step": 0.1, "default": 10.0, "unit": "ms", "viz": false },
+      { "key": "release", "name": "Release", "short_name": "Rel", "type": "float", "min": 10.0, "max": 2000.0, "step": 1.0, "default": 150.0, "unit": "ms", "viz": false },
+      { "key": "knee", "name": "Knee", "type": "float", "min": 0.0, "max": 24.0, "step": 0.5, "default": 6.0, "unit": "dB" },
+      { "key": "makeup", "name": "Makeup", "short_name": "Gain", "type": "float", "min": -12.0, "max": 24.0, "step": 0.5, "default": 0.0, "unit": "dB" },
+      { "key": "mix", "name": "Mix", "type": "float", "min": 0.0, "max": 1.0, "step": 0.01, "default": 1.0, "unit": "%" },
+      { "key": "gr", "name": "Gain Reduction", "short_name": "GR", "type": "float", "min": 0.0, "max": 24.0, "access": "read", "live": true, "viz": { "kind": "custom:grmeter" } },
+      { "key": "input", "name": "Input Gain", "short_name": "In", "type": "float", "min": -24.0, "max": 24.0, "step": 0.5, "default": 0.0, "unit": "dB", "viz": { "kind": "fader" } },
+      { "key": "sc_hpf", "name": "Sidechain HPF", "short_name": "HPF", "type": "enum", "options": ["Off", "60 Hz", "100 Hz", "150 Hz", "250 Hz"], "default": 0 },
+      { "key": "detect", "name": "Detector", "short_name": "Det", "type": "enum", "options": ["Peak", "RMS"], "default": 0 },
+      { "key": "auto_makeup", "name": "Auto Makeup", "short_name": "Auto", "type": "enum", "options": ["Off", "On"], "default": 0, "viz": { "kind": "switch" } },
+      { "key": "curve", "name": "Curve", "type": "canvas", "canvas_script": "canvas.js", "as_page": true, "show_value": false }
+    ],
+    "ui_hierarchy": {
+      "levels": {
+        "root": {
+          "name": "Compressor",
+          "knobs": ["threshold", "ratio", "attack", "release", "knee", "makeup", "mix", "gr"],
+          "params": [
+            { "key": "threshold" },
+            { "key": "ratio" },
+            { "key": "attack" },
+            { "key": "release" },
+            { "key": "knee" },
+            { "key": "makeup" },
+            { "key": "mix" },
+            { "key": "gr" },
+            { "key": "curve" },
+            { "level": "presets", "label": "Presets" },
+            { "level": "setup", "label": "Setup" }
+          ]
+        },
+        "presets": {
+          "name": "Presets",
+          "list_param": "preset",
+          "count_param": "preset_count",
+          "name_param": "preset_name"
+        },
+        "setup": {
+          "name": "Setup",
+          "knobs": ["input", "sc_hpf", "detect", "auto_makeup", "gr"],
+          "params": [
+            { "key": "input" },
+            { "key": "sc_hpf" },
+            { "key": "detect" },
+            { "key": "auto_makeup" },
+            { "key": "gr" }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "title": "Compressor",
+  "children": [
+    {
+      "title": "Overview",
+      "lines": [
+        "A compressor for live",
+        "sources: vocals and",
+        "acoustic guitar on",
+        "the line input, or",
+        "anything in a chain.",
+        "",
+        "It adds no delay, so",
+        "a singer monitoring",
+        "through it hears",
+        "themselves on time.",
+        "",
+        "Typical chain:",
+        " Line In > Compressor",
+        "",
+        "Start from a preset,",
+        "then set Threshold",
+        "while watching GR."
+      ]
+    },
+    {
+      "title": "Main Page",
+      "lines": [
+        "K1 Thrsh: level where",
+        " compression starts",
+        " (-60 to 0 dB)",
+        "K2 Ratio: how hard",
+        " it pushes back. 3",
+        " means 3 dB over",
+        " comes out as 1 dB",
+        "K3 Atk: how fast it",
+        " clamps down (ms)",
+        "K4 Rel: how fast it",
+        " lets go (ms)",
+        "K5 Knee: width of the",
+        " soft bend around",
+        " the threshold",
+        "K6 Gain: makeup gain",
+        " after compressing",
+        "K7 Mix: dry/wet, for",
+        " parallel squashing",
+        "K8 GR: the meter"
+      ]
+    },
+    {
+      "title": "Reading the Meter",
+      "lines": [
+        "GR shows how far the",
+        "level is being turned",
+        "down right now, in dB.",
+        "The bar fills from",
+        "the right; ticks mark",
+        "3, 6 and 12 dB.",
+        "",
+        "Touch knob 8 to read",
+        "it, plus the level",
+        "the detector sees.",
+        "",
+        "Rough guide:",
+        " 2-4 dB gentle",
+        " 4-8 dB obvious",
+        " 10+ dB squashed"
+      ]
+    },
+    {
+      "title": "Curve Page",
+      "lines": [
+        "Jog right from Main.",
+        "",
+        "Left: input level",
+        "across, output up.",
+        "The dotted diagonal",
+        "is no compression;",
+        "the solid line is",
+        "what you have set.",
+        "The dot is where the",
+        "signal is now.",
+        "",
+        "The same 8 knobs",
+        "work here, so turning",
+        "Thrsh, Ratio or Knee",
+        "bends the curve."
+      ]
+    },
+    {
+      "title": "Setup Page",
+      "lines": [
+        "In: input gain before",
+        " the compressor. Use",
+        " it to hit the",
+        " threshold harder.",
+        " Presets leave it",
+        " alone.",
+        "HPF: high-pass on the",
+        " detector only, so",
+        " lows and pops do not",
+        " pump the vocal. The",
+        " audio keeps its",
+        " bass.",
+        "Det: Peak reacts to",
+        " every transient; RMS",
+        " follows loudness",
+        " and is smoother.",
+        "Auto: adds makeup",
+        " gain worth half the",
+        " reduction a full",
+        " scale signal gets.",
+        " Gain adds on top."
+      ]
+    },
+    {
+      "title": "Presets",
+      "lines": [
+        "Default",
+        "Vocal Leveler",
+        " even, natural",
+        "Vocal Upfront",
+        " pop vocal, forward",
+        "Vocal Gentle",
+        " light touch",
+        "Spoken Word",
+        "Acoustic Strum",
+        " keeps the pick",
+        "Fingerpicked",
+        "Parallel Crush",
+        " heavy, mixed low",
+        "Peak Catcher",
+        " near-limiter",
+        "Bus Glue",
+        "Drum Punch",
+        "",
+        "Save your own with",
+        "My Presets."
+      ]
+    },
+    {
+      "title": "Tips",
+      "lines": [
+        "Vocals: lower Thrsh",
+        "until GR swings",
+        "3-6 dB on louder",
+        "phrases, then bring",
+        "back level with Gain.",
+        "",
+        "Pumping or breathing?",
+        "Raise HPF, lengthen",
+        "Rel, or use RMS.",
+        "",
+        "Lost the pick attack?",
+        "Lengthen Atk.",
+        "",
+        "Too squashed but you",
+        "like the density?",
+        "Lower Mix."
+      ]
+    }
+  ]
+}
